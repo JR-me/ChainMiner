@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>⛏ CHAIN MINER</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:       #0a0a0a;
+    --surface:  #111111;
+    --border:   #2a2a2a;
+    --ore:      #f5a623;
+    --ore-dim:  #7a5212;
+    --drill:    #4fc3f7;
+    --excav:    #b39ddb;
+    --green:    #69ff47;
+    --red:      #ff4757;
+    --text:     #e0e0e0;
+    --muted:    #555;
+    --glow:     rgba(245,166,35,0.35);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Share Tech Mono', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+    position: relative;
+  }
+
+  /* Scanline overlay */
+  body::before {
+    content: '';
+    position: fixed; inset: 0; z-index: 999; pointer-events: none;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.08) 2px,
+      rgba(0,0,0,0.08) 4px
+    );
+  }
+
+  /* Noise texture */
+  body::after {
+    content: '';
+    position: fixed; inset: 0; z-index: 998; pointer-events: none;
+    opacity: 0.03;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 200px;
+  }
+
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 1rem 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--surface);
+  }
+
+  .logo {
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 900;
+    font-size: 1.4rem;
+    color: var(--ore);
+    letter-spacing: 0.2em;
+    text-shadow: 0 0 20px var(--glow);
+  }
+
+  .logo span { color: var(--muted); font-weight: 400; font-size: 0.9rem; }
+
+  #connect-btn {
+    background: transparent;
+    border: 1px solid var(--ore);
+    color: var(--ore);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.85rem;
+    padding: 0.5rem 1.2rem;
+    cursor: pointer;
+    letter-spacing: 0.1em;
+    transition: all 0.2s;
+  }
+  #connect-btn:hover { background: var(--ore); color: #000; }
+  #connect-btn.connected { border-color: var(--green); color: var(--green); }
+
+  main {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    grid-template-rows: auto auto;
+    gap: 1.5rem;
+    padding: 2rem;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 1.5rem;
+  }
+
+  .panel-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.7rem;
+    letter-spacing: 0.3em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 1.2rem;
+    padding-bottom: 0.6rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* ── Mine panel ── */
+  .mine-panel {
+    grid-row: 1 / 3;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2rem;
+  }
+
+  .ore-display {
+    text-align: center;
+  }
+
+  .ore-count {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 4rem;
+    font-weight: 900;
+    color: var(--ore);
+    text-shadow: 0 0 40px var(--glow), 0 0 80px var(--glow);
+    line-height: 1;
+    transition: transform 0.1s;
+  }
+
+  .ore-count.pulse {
+    transform: scale(1.06);
+  }
+
+  .ore-label {
+    font-size: 0.8rem;
+    color: var(--ore-dim);
+    letter-spacing: 0.3em;
+    margin-top: 0.3rem;
+  }
+
+  /* The mine button */
+  .mine-btn-wrap {
+    position: relative;
+    width: 220px;
+    height: 220px;
+  }
+
+  #mine-btn {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #2a1a00, #0d0800);
+    border: 3px solid var(--ore-dim);
+    cursor: pointer;
+    position: relative;
+    transition: border-color 0.15s, box-shadow 0.15s, transform 0.1s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 0.4rem;
+    outline: none;
+  }
+
+  #mine-btn:hover {
+    border-color: var(--ore);
+    box-shadow: 0 0 30px var(--glow), inset 0 0 20px rgba(245,166,35,0.08);
+  }
+
+  #mine-btn:active, #mine-btn.clicking {
+    transform: scale(0.94);
+    border-color: var(--ore);
+    box-shadow: 0 0 60px var(--glow), inset 0 0 30px rgba(245,166,35,0.15);
+  }
+
+  #mine-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .btn-icon {
+    font-size: 3.5rem;
+    line-height: 1;
+    filter: drop-shadow(0 0 8px var(--glow));
+  }
+
+  .btn-label {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.65rem;
+    letter-spacing: 0.2em;
+    color: var(--ore-dim);
+  }
+
+  /* Orbit ring */
+  .mine-btn-wrap::before {
+    content: '';
+    position: absolute;
+    inset: -12px;
+    border-radius: 50%;
+    border: 1px dashed var(--border);
+    animation: orbit-spin 20s linear infinite;
+  }
+
+  @keyframes orbit-spin { to { transform: rotate(360deg); } }
+
+  /* Floating +ORE particles */
+  .float-particle {
+    position: absolute;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--ore);
+    pointer-events: none;
+    animation: float-up 1.2s ease-out forwards;
+    text-shadow: 0 0 10px var(--glow);
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+  }
+
+  @keyframes float-up {
+    0%   { opacity: 1; transform: translate(calc(-50% + var(--dx)), -50%); }
+    100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% - 80px)); }
+  }
+
+  /* Tool badge */
+  .tool-badge {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    padding: 0.8rem 1.2rem;
+    border: 1px solid var(--border);
+    width: 100%;
+    max-width: 320px;
+  }
+
+  .tool-icon { font-size: 1.6rem; }
+
+  .tool-info { flex: 1; }
+  .tool-name {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.75rem;
+    letter-spacing: 0.15em;
+  }
+  .tool-name.pickaxe  { color: var(--text); }
+  .tool-name.drill    { color: var(--drill); text-shadow: 0 0 10px rgba(79,195,247,0.4); }
+  .tool-name.excavator{ color: var(--excav); text-shadow: 0 0 10px rgba(179,157,219,0.4); }
+
+  .tool-yield { font-size: 0.75rem; color: var(--muted); margin-top: 0.2rem; }
+
+  .upgrade-bar-wrap { margin-top: 0.5rem; }
+  .upgrade-bar-label { font-size: 0.7rem; color: var(--muted); margin-bottom: 0.3rem; }
+  .upgrade-bar {
+    height: 4px;
+    background: var(--border);
+    position: relative;
+    overflow: hidden;
+  }
+  .upgrade-bar-fill {
+    height: 100%;
+    background: var(--ore);
+    width: 0%;
+    transition: width 0.4s;
+  }
+
+  /* ── Stats panel ── */
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.85rem;
+  }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-key { color: var(--muted); }
+  .stat-val { color: var(--text); font-weight: bold; }
+  .stat-val.ore { color: var(--ore); }
+
+  /* ── Leaderboard panel ── */
+  .lb-row {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.8rem;
+  }
+  .lb-row:last-child { border-bottom: none; }
+
+  .lb-rank {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.7rem;
+    color: var(--muted);
+    width: 1.4rem;
+    text-align: center;
+  }
+  .lb-rank.gold   { color: #ffd700; }
+  .lb-rank.silver { color: #c0c0c0; }
+  .lb-rank.bronze { color: #cd7f32; }
+
+  .lb-addr { flex: 1; color: var(--muted); font-size: 0.72rem; }
+  .lb-addr.you { color: var(--ore); }
+  .lb-ore { color: var(--ore); font-family: 'Orbitron', sans-serif; font-size: 0.75rem; }
+
+  /* ── Log panel ── */
+  .log-panel { grid-column: 1 / -1; }
+
+  #tx-log {
+    height: 120px;
+    overflow-y: auto;
+    font-size: 0.75rem;
+    line-height: 1.8;
+  }
+
+  .log-entry { display: flex; gap: 0.8rem; }
+  .log-time { color: var(--muted); flex-shrink: 0; }
+  .log-msg  { color: var(--text); }
+  .log-hash { color: var(--ore-dim); }
+  .log-hash a { color: inherit; text-decoration: none; }
+  .log-hash a:hover { color: var(--ore); }
+
+  .log-entry.pending .log-msg { color: var(--muted); }
+  .log-entry.success .log-msg { color: var(--green); }
+  .log-entry.error   .log-msg { color: var(--red); }
+
+  .badge-card {
+    border: 1px solid var(--border);
+    padding: 1rem;
+    text-align: center;
+  }
+  .badge-tier {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 1rem;
+    letter-spacing: 0.15em;
+    margin: 0.5rem 0 0.2rem;
+  }
+  .badge-tier.legendary { color: #c084fc; text-shadow: 0 0 12px rgba(192,132,252,0.5); }
+  .badge-tier.rare      { color: var(--drill); text-shadow: 0 0 12px rgba(79,195,247,0.4); }
+  .badge-tier.common    { color: var(--green); }
+
+  .badge-emoji { font-size: 2.8rem; line-height: 1; }
+  .badge-sub   { font-size: 0.72rem; color: var(--muted); margin-bottom: 0.8rem; }
+
+  .claim-btn {
+    background: transparent;
+    border: 1px solid var(--ore);
+    color: var(--ore);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.8rem;
+    padding: 0.5rem 1.5rem;
+    cursor: pointer;
+    letter-spacing: 0.1em;
+    width: 100%;
+    transition: all 0.2s;
+  }
+  .claim-btn:hover:not(:disabled) { background: var(--ore); color: #000; }
+  .claim-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .claim-btn.claimed { border-color: var(--green); color: var(--green); }
+
+  .badge-counts { display: flex; gap: 0.5rem; margin-top: 0.8rem; }
+  .badge-count-item {
+    flex: 1; text-align: center; padding: 0.4rem;
+    border: 1px solid var(--border); font-size: 0.7rem;
+  }
+  .badge-count-num { font-family: 'Orbitron', sans-serif; font-size: 0.9rem; }
+  .badge-count-num.legendary { color: #c084fc; }
+  .badge-count-num.rare      { color: var(--drill); }
+  .badge-count-num.common    { color: var(--green); }
+  #tx-log::-webkit-scrollbar { width: 4px; }
+  #tx-log::-webkit-scrollbar-track { background: var(--bg); }
+  #tx-log::-webkit-scrollbar-thumb { background: var(--border); }
+
+  /* Status bar */
+  #status-bar {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding: 0.4rem 2rem;
+    font-size: 0.72rem;
+    color: var(--muted);
+    display: flex;
+    gap: 2rem;
+    z-index: 100;
+  }
+  .status-item span { color: var(--text); }
+
+  /* Empty states */
+  .empty { color: var(--muted); font-size: 0.8rem; text-align: center; padding: 1rem 0; }
+
+  /* Responsive */
+  @media (max-width: 700px) {
+    main { grid-template-columns: 1fr; padding: 1rem; }
+    .mine-panel { grid-row: auto; }
+    .log-panel { grid-column: auto; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">⛏ CHAIN MINER <span>/ MAINNET</span></div>
+  <button id="connect-btn" onclick="connectWallet()">CONNECT WALLET</button>
+</header>
+
+<main>
+
+  <!-- ── Mine panel ── -->
+  <div class="panel mine-panel">
+    <div class="panel-title">Mining Console</div>
+
+    <div class="ore-display">
+      <div class="ore-count" id="ore-count">—</div>
+      <div class="ore-label">ORE MINED ALL-TIME</div>
+    </div>
+
+    <div class="mine-btn-wrap" id="btn-wrap">
+      <button id="mine-btn" onclick="doClick()" disabled>
+        <div class="btn-icon" id="btn-icon">⛏</div>
+        <div class="btn-label" id="btn-label">CONNECT</div>
+      </button>
+    </div>
+
+    <div class="tool-badge" id="tool-badge">
+      <div class="tool-icon" id="tool-icon">⛏</div>
+      <div class="tool-info">
+        <div class="tool-name pickaxe" id="tool-name">PICKAXE</div>
+        <div class="tool-yield" id="tool-yield">+1 ORE / CLICK</div>
+        <div class="upgrade-bar-wrap" id="upgrade-wrap">
+          <div class="upgrade-bar-label" id="upgrade-label">50 ORE to unlock DRILL</div>
+          <div class="upgrade-bar"><div class="upgrade-bar-fill" id="upgrade-fill"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Stats panel ── -->
+  <div class="panel">
+    <div class="panel-title">Your Stats</div>
+    <div class="stat-row"><span class="stat-key">ADDRESS</span>      <span class="stat-val" id="s-addr">—</span></div>
+    <div class="stat-row"><span class="stat-key">ORE BALANCE</span>  <span class="stat-val ore" id="s-balance">—</span></div>
+    <div class="stat-row"><span class="stat-key">TOTAL MINED</span>  <span class="stat-val ore" id="s-mined">—</span></div>
+    <div class="stat-row"><span class="stat-key">TOTAL CLICKS</span> <span class="stat-val" id="s-clicks">—</span></div>
+    <div class="stat-row"><span class="stat-key">CURRENT TOOL</span> <span class="stat-val" id="s-tool">—</span></div>
+    <div class="stat-row"><span class="stat-key">YIELD/CLICK</span>  <span class="stat-val ore" id="s-yield">—</span></div>
+  </div>
+
+  <!-- ── Badge panel ── -->
+  <div class="panel">
+    <div class="panel-title">Miner Badge NFT</div>
+    <div id="badge-status">
+      <div class="empty">Connect wallet to check eligibility.</div>
+    </div>
+  </div>
+
+  <!-- ── Leaderboard panel ── -->
+  <div class="panel">
+    <div class="panel-title">Global Leaderboard</div>
+    <div id="leaderboard-rows"><div class="empty">No miners yet.</div></div>
+  </div>
+
+  <!-- ── Log panel ── -->
+  <div class="panel log-panel">
+    <div class="panel-title">Transaction Log</div>
+    <div id="tx-log"><div class="empty">Transactions will appear here.</div></div>
+  </div>
+
+</main>
+
+<div id="status-bar">
+  <div class="status-item">NETWORK: <span id="st-network">—</span></div>
+  <div class="status-item">BLOCK: <span id="st-block">—</span></div>
+  <div class="status-item">GAS: <span id="st-gas">—</span></div>
+  <div class="status-item">CONTRACT: <span id="st-contract">NOT SET</span></div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// CONFIG — fill these in after deployment
+// ─────────────────────────────────────────────────────────────────────────────
+const CHAIN_MINER_ADDRESS = "0x0000000000000000000000000000000000000000"; // <-- your ChainMiner address
+const ORE_ADDRESS         = "0x0000000000000000000000000000000000000000"; // <-- your ORE address
+const BADGE_ADDRESS       = "0x0000000000000000000000000000000000000000"; // <-- your MinerBadge address
+
+const CHAIN_MINER_ABI = [
+  { name: "click",      type: "function", inputs: [],                                                          outputs: [],                                         stateMutability: "nonpayable" },
+  { name: "getStats",   type: "function", inputs: [{ name: "player", type: "address" }],                       outputs: [{ name: "totalMined", type: "uint256" }, { name: "clicks", type: "uint256" }, { name: "tool", type: "uint8" }, { name: "yieldPerClick", type: "uint256" }], stateMutability: "view" },
+  { name: "getLeaderboard", type: "function", inputs: [],                                                      outputs: [{ name: "addrs", type: "address[]" }, { name: "totals", type: "uint256[]" }], stateMutability: "view" },
+  { name: "oreToNextUpgrade", type: "function", inputs: [{ name: "player", type: "address" }],                 outputs: [{ name: "", type: "uint256" }],             stateMutability: "view" },
+  { name: "globalSupplyRemaining", type: "function", inputs: [], outputs: [{ name: "", type: "uint256" }], stateMutability: "view" },
+  { name: "totalMinted",           type: "function", inputs: [], outputs: [{ name: "", type: "uint256" }], stateMutability: "view" },
+  { name: "MAX_ORE_GLOBAL",        type: "function", inputs: [], outputs: [{ type: "uint256" }], stateMutability: "view" },
+  { name: "MAX_ORE_PER_USER",      type: "function", inputs: [], outputs: [{ type: "uint256" }], stateMutability: "view" },
+  { name: "DRILL_THRESHOLD",     type: "function", inputs: [], outputs: [{ type: "uint256" }], stateMutability: "view" },
+  { name: "EXCAVATOR_THRESHOLD", type: "function", inputs: [], outputs: [{ type: "uint256" }], stateMutability: "view" },
+  { name: "Clicked",   type: "event", inputs: [{ name: "player", type: "address", indexed: true }, { name: "oreEarned", type: "uint256", indexed: false }, { name: "totalMined", type: "uint256", indexed: false }, { name: "tool", type: "uint8", indexed: false }] },
+  { name: "Upgraded",  type: "event", inputs: [{ name: "player", type: "address", indexed: true }, { name: "newTool", type: "uint8", indexed: false }] },
+];
+
+const ORE_ABI = [
+  { name: "balanceOf", type: "function", inputs: [{ name: "", type: "address" }], outputs: [{ name: "", type: "uint256" }], stateMutability: "view" },
+];
+
+const BADGE_ABI = [
+  { name: "claim",       type: "function", inputs: [], outputs: [], stateMutability: "nonpayable" },
+  { name: "hasClaimed",  type: "function", inputs: [{ name: "", type: "address" }], outputs: [{ name: "", type: "bool" }], stateMutability: "view" },
+  { name: "tierOf",      type: "function", inputs: [{ name: "", type: "uint256" }], outputs: [{ name: "", type: "uint8" }], stateMutability: "view" },
+  { name: "tokenOfOwner",type: "function", inputs: [{ name: "", type: "address" }], outputs: [{ name: "", type: "uint256" }], stateMutability: "view" },
+  { name: "eligibility", type: "function", inputs: [{ name: "player", type: "address" }], outputs: [{ name: "eligible", type: "bool" }, { name: "projectedTier", type: "uint8" }, { name: "totalMined", type: "uint256" }], stateMutability: "view" },
+  { name: "legendaryCount", type: "function", inputs: [], outputs: [{ type: "uint256" }], stateMutability: "view" },
+  { name: "rareCount",      type: "function", inputs: [], outputs: [{ type: "uint256" }], stateMutability: "view" },
+  { name: "commonCount",    type: "function", inputs: [], outputs: [{ type: "uint256" }], stateMutability: "view" },
+  { name: "BadgeClaimed", type: "event", inputs: [{ name: "player", type: "address", indexed: true }, { name: "tokenId", type: "uint256", indexed: false }, { name: "tier", type: "uint8", indexed: false }] },
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+const TOOLS = ["PICKAXE", "DRILL", "EXCAVATOR"];
+const TOOL_ICONS = ["⛏", "🔩", "🚜"];
+const TOOL_CLASS = ["pickaxe", "drill", "excavator"];
+const UPGRADE_THRESHOLDS = [100, 400]; // to drill, to excavator
+
+let provider, signer, account;
+let minerContract, oreContract, badgeContract;
+let isMining = false;
+let stats = null;
+
+// ── Wallet ────────────────────────────────────────────────────────────────────
+
+async function connectWallet() {
+  if (!window.ethereum) {
+    addLog("error", "MetaMask not detected. Install MetaMask to play.");
+    return;
+  }
+  try {
+    const { ethers } = await import("https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.min.js");
+    window.ethers = ethers;
+
+    provider = new ethers.BrowserProvider(window.ethereum);
+    await provider.send("eth_requestAccounts", []);
+    signer = await provider.getSigner();
+    account = await signer.getAddress();
+
+    const network = await provider.getNetwork();
+    document.getElementById("st-network").textContent = `Chain ${network.chainId}`;
+    document.getElementById("st-contract").textContent = CHAIN_MINER_ADDRESS.slice(0, 10) + "...";
+
+    minerContract = new ethers.Contract(CHAIN_MINER_ADDRESS, CHAIN_MINER_ABI, signer);
+    oreContract   = new ethers.Contract(ORE_ADDRESS, ORE_ABI, provider);
+    badgeContract = new ethers.Contract(BADGE_ADDRESS, BADGE_ABI, signer);
+
+    const btn = document.getElementById("connect-btn");
+    btn.textContent = account.slice(0, 6) + "..." + account.slice(-4);
+    btn.classList.add("connected");
+
+    document.getElementById("s-addr").textContent = account.slice(0, 6) + "..." + account.slice(-4);
+    document.getElementById("mine-btn").disabled = false;
+    document.getElementById("btn-label").textContent = "MINE";
+
+    addLog("success", `Wallet connected: ${account.slice(0, 10)}...`);
+
+    await refreshStats();
+    await refreshBadge();
+    startPolling();
+
+  } catch (e) {
+    addLog("error", "Connection failed: " + e.message);
+  }
+}
+
+// ── Mining ────────────────────────────────────────────────────────────────────
+
+async function doClick() {
+  if (!signer || isMining) return;
+  isMining = true;
+
+  const btn = document.getElementById("mine-btn");
+  btn.disabled = true;
+  btn.classList.add("clicking");
+  spawnParticle();
+
+  addLog("pending", "Mining... waiting for tx confirmation");
+
+  try {
+    const tx = await minerContract.click();
+    addLog("pending", `Tx sent: `, tx.hash);
+
+    const receipt = await tx.wait();
+    addLog("success", `Mined! Block ${receipt.blockNumber}`, tx.hash);
+
+    await refreshStats();
+    await refreshLeaderboard();
+    await refreshBadge();
+
+    // Pulse the counter
+    const counter = document.getElementById("ore-count");
+    counter.classList.add("pulse");
+    setTimeout(() => counter.classList.remove("pulse"), 200);
+
+  } catch (e) {
+    const msg = e?.info?.error?.message || e.message || "Transaction failed";
+    addLog("error", msg.slice(0, 80));
+  } finally {
+    isMining = false;
+    btn.disabled = false;
+    btn.classList.remove("clicking");
+  }
+}
+
+function spawnParticle() {
+  const wrap = document.getElementById("btn-wrap");
+  const p = document.createElement("div");
+  p.className = "float-particle";
+  const yield_ = stats ? (stats.tool === 0 ? 1 : stats.tool === 1 ? 3 : 9) : 1;
+  p.textContent = `+${yield_} ORE`;
+  const dx = (Math.random() - 0.5) * 60;
+  p.style.setProperty("--dx", dx + "px");
+  wrap.appendChild(p);
+  setTimeout(() => p.remove(), 1300);
+}
+
+// ── Stats & leaderboard ───────────────────────────────────────────────────────
+
+async function refreshStats() {
+  if (!minerContract || !account) return;
+  try {
+    const [totalMined, clicks, tool, yieldPerClick] = await minerContract.getStats(account);
+    const balance = await oreContract.balanceOf(account);
+
+    stats = { totalMined: Number(totalMined), clicks: Number(clicks), tool: Number(tool), yieldPerClick: Number(yieldPerClick) };
+
+    document.getElementById("ore-count").textContent = stats.totalMined.toLocaleString();
+    document.getElementById("s-balance").textContent = Number(balance).toLocaleString() + " ORE";
+    document.getElementById("s-mined").textContent   = stats.totalMined.toLocaleString() + " ORE";
+    document.getElementById("s-clicks").textContent  = stats.clicks.toLocaleString();
+    document.getElementById("s-tool").textContent    = TOOLS[stats.tool];
+    document.getElementById("s-yield").textContent   = `+${stats.yieldPerClick} ORE`;
+
+    updateToolBadge(stats);
+  } catch (e) {
+    console.error("Stats error:", e);
+  }
+}
+
+function updateToolBadge(s) {
+  const toolClass = TOOL_CLASS[s.tool];
+  document.getElementById("tool-icon").textContent = TOOL_ICONS[s.tool];
+  const tn = document.getElementById("tool-name");
+  tn.textContent = TOOLS[s.tool];
+  tn.className   = `tool-name ${toolClass}`;
+  document.getElementById("tool-yield").textContent = `+${s.yieldPerClick} ORE / CLICK`;
+  document.getElementById("btn-icon").textContent   = TOOL_ICONS[s.tool];
+
+  const upgradeWrap = document.getElementById("upgrade-wrap");
+  if (s.tool === 2) {
+    upgradeWrap.style.display = "none";
+  } else {
+    upgradeWrap.style.display = "";
+    const threshold = UPGRADE_THRESHOLDS[s.tool];
+    const nextTool  = TOOLS[s.tool + 1];
+    const progress  = Math.min(s.totalMined / threshold, 1);
+    document.getElementById("upgrade-label").textContent =
+      s.totalMined >= threshold
+        ? `Ready to upgrade to ${nextTool}!`
+        : `${threshold - s.totalMined} ORE to unlock ${nextTool}`;
+    document.getElementById("upgrade-fill").style.width = (progress * 100) + "%";
+  }
+}
+
+async function refreshLeaderboard() {
+  if (!minerContract) return;
+  try {
+    const [addrs, totals] = await minerContract.getLeaderboard();
+    const container = document.getElementById("leaderboard-rows");
+
+    if (addrs.length === 0) {
+      container.innerHTML = '<div class="empty">No miners yet.</div>';
+      return;
+    }
+
+    const rankLabels = ["#1", "#2", "#3"];
+    const rankClasses = ["gold", "silver", "bronze"];
+
+    container.innerHTML = addrs.map((addr, i) => {
+      const rankLabel = i < 3 ? rankLabels[i] : `#${i + 1}`;
+      const rankCls   = i < 3 ? rankClasses[i] : "";
+      const isYou     = account && addr.toLowerCase() === account.toLowerCase();
+      return `
+        <div class="lb-row">
+          <div class="lb-rank ${rankCls}">${rankLabel}</div>
+          <div class="lb-addr ${isYou ? "you" : ""}">${isYou ? "YOU" : addr.slice(0, 6) + "..." + addr.slice(-4)}</div>
+          <div class="lb-ore">${Number(totals[i]).toLocaleString()} ORE</div>
+        </div>`;
+    }).join("");
+  } catch (e) {
+    console.error("Leaderboard error:", e);
+  }
+}
+
+// ── Badge ─────────────────────────────────────────────────────────────────────
+
+const TIER_NAMES  = ["Common", "Rare", "Legendary"];
+const TIER_EMOJIS = ["⛏", "💎", "⭐"];
+const TIER_CLASS  = ["common", "rare", "legendary"];
+
+async function refreshBadge() {
+  if (!badgeContract || !account) return;
+  const container = document.getElementById("badge-status");
+  try {
+    const [eligible, projectedTier, totalMined] = await badgeContract.eligibility(account);
+    const claimed = await badgeContract.hasClaimed(account);
+    const [lCount, rCount, cCount] = await Promise.all([
+      badgeContract.legendaryCount(),
+      badgeContract.rareCount(),
+      badgeContract.commonCount(),
+    ]);
+
+    const tier = Number(projectedTier);
+    const tierName  = TIER_NAMES[tier];
+    const tierEmoji = TIER_EMOJIS[tier];
+    const tierClass = TIER_CLASS[tier];
+
+    let tokenIdLine = "";
+    if (claimed) {
+      const tokenId = await badgeContract.tokenOfOwner(account);
+      tokenIdLine = `<div class="badge-sub">Token #${tokenId}</div>`;
+    }
+
+    container.innerHTML = `
+      <div class="badge-card">
+        <div class="badge-emoji">${eligible ? tierEmoji : "🪨"}</div>
+        <div class="badge-tier ${eligible ? tierClass : ""}">${eligible ? tierName : "NOT ELIGIBLE"}</div>
+        ${eligible ? tokenIdLine : `<div class="badge-sub">${400 - Number(totalMined)} more ORE needed</div>`}
+        ${eligible && !claimed
+          ? `<div class="badge-sub">Click to claim your ${tierName} badge</div>
+             <button class="claim-btn" onclick="claimBadge()">CLAIM BADGE</button>`
+          : claimed
+          ? `<button class="claim-btn claimed" disabled>✓ BADGE CLAIMED</button>`
+          : `<button class="claim-btn" disabled>NOT ELIGIBLE YET</button>`
+        }
+      </div>
+      <div class="badge-counts">
+        <div class="badge-count-item">
+          <div class="badge-count-num legendary">${lCount}</div>
+          <div>Legendary</div>
+        </div>
+        <div class="badge-count-item">
+          <div class="badge-count-num rare">${rCount}</div>
+          <div>Rare</div>
+        </div>
+        <div class="badge-count-item">
+          <div class="badge-count-num common">${cCount}</div>
+          <div>Common</div>
+        </div>
+      </div>`;
+  } catch (e) {
+    console.error("Badge error:", e);
+  }
+}
+
+async function claimBadge() {
+  if (!badgeContract) return;
+  addLog("pending", "Claiming badge...");
+  try {
+    const tx = await badgeContract.claim();
+    addLog("pending", "Claim tx sent:", tx.hash);
+    await tx.wait();
+    addLog("success", "Badge claimed!", tx.hash);
+    await refreshBadge();
+  } catch (e) {
+    addLog("error", (e?.info?.error?.message || e.message || "Claim failed").slice(0, 80));
+  }
+}
+
+// ── Log ───────────────────────────────────────────────────────────────────────
+
+function addLog(type, msg, hash) {
+  const log = document.getElementById("tx-log");
+  const empty = log.querySelector(".empty");
+  if (empty) empty.remove();
+
+  const now = new Date().toLocaleTimeString();
+  const entry = document.createElement("div");
+  entry.className = `log-entry ${type}`;
+
+  const hashPart = hash
+    ? `<span class="log-hash"><a href="https://etherscan.io/tx/${hash}" target="_blank">${hash.slice(0, 12)}…</a></span>`
+    : "";
+
+  entry.innerHTML = `<span class="log-time">[${now}]</span><span class="log-msg">${msg}</span>${hashPart}`;
+  log.prepend(entry);
+
+  // Keep max 50 entries
+  while (log.children.length > 50) log.removeChild(log.lastChild);
+}
+
+// ── Polling ───────────────────────────────────────────────────────────────────
+
+function startPolling() {
+  setInterval(async () => {
+    if (!provider) return;
+    try {
+      const block   = await provider.getBlockNumber();
+      const feeData = await provider.getFeeData();
+      document.getElementById("st-block").textContent = block.toLocaleString();
+      if (feeData.gasPrice) {
+        const gwei = Number(window.ethers.formatUnits(feeData.gasPrice, "gwei")).toFixed(1);
+        document.getElementById("st-gas").textContent = gwei + " gwei";
+      }
+    } catch {}
+  }, 12000); // every ~block
+
+  // Refresh leaderboard every 30s
+  setInterval(refreshLeaderboard, 30000);
+}
+</script>
+</body>
+</html>
