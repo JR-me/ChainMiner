@@ -132,18 +132,23 @@ contract MinerBadge {
         require(_ownerOf[tokenId] != address(0), "Token does not exist");
         Tier t = tierOf[tokenId];
         string memory tierName  = t == Tier.Legendary ? "Legendary" : t == Tier.Rare ? "Rare" : "Common";
-        string memory tierEmoji = t == Tier.Legendary ? "\\u2b50" : t == Tier.Rare ? "\\ud83d\\udc8e" : "\\u26cf";
+        string memory tierEmoji = t == Tier.Legendary ? unicode"⭐" : t == Tier.Rare ? unicode"💎" : unicode"⛏";
+
+        // Split into two encodePacked calls to stay within the 16-slot stack limit.
+        string memory svg = string(abi.encodePacked(
+            'data:image/svg+xml;utf8,<svg xmlns=\\"http://www.w3.org/2000/svg\\" viewBox=\\"0 0 200 200\\">',
+            '<rect width=\\"200\\" height=\\"200\\" fill=\\"', _bgColor(t), '\\"/>',
+            '<text x=\\"100\\" y=\\"90\\" font-size=\\"60\\" text-anchor=\\"middle\\" dominant-baseline=\\"middle\\">', tierEmoji, '</text>',
+            '<text x=\\"100\\" y=\\"150\\" font-size=\\"14\\" fill=\\"white\\" text-anchor=\\"middle\\" font-family=\\"monospace\\">', tierName, '</text>',
+            '</svg>'
+        ));
 
         return string(abi.encodePacked(
             'data:application/json;utf8,{"name":"Chain Miner Badge #', _toString(tokenId),
             '","description":"Awarded to Chain Miner players for reaching ORE milestones.",',
-            '"attributes":[{"trait_type":"Tier","value":"', tierName, '"},',
-            '{"trait_type":"Token ID","value":"', _toString(tokenId), '"}],',
-            '"image":"data:image/svg+xml;utf8,<svg xmlns=\\"http://www.w3.org/2000/svg\\" viewBox=\\"0 0 200 200\\">',
-            '<rect width=\\"200\\" height=\\"200\\" fill=\\"', _bgColor(t), '\\"/>',
-            '<text x=\\"100\\" y=\\"90\\" font-size=\\"60\\" text-anchor=\\"middle\\" dominant-baseline=\\"middle\\">', tierEmoji, '</text>',
-            '<text x=\\"100\\" y=\\"150\\" font-size=\\"14\\" fill=\\"white\\" text-anchor=\\"middle\\" font-family=\\"monospace\\">', tierName, '</text>',
-            '</svg>"}'
+            '"attributes":[{"trait_type":"Tier","value":"', tierName,
+            '"},{"trait_type":"Token ID","value":"', _toString(tokenId), '"}],',
+            '"image":"', svg, '"}'
         ));
     }
 
